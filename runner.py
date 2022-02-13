@@ -12,14 +12,10 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLRO
 from tensorflow.keras.optimizers import Adam
 from dataclasses import dataclass
 from trainer import *
-from initial_parser import *
-from splitter import *
 from data_provider import *
 from custom_models import *
 from custom_metrics import *
 from custom_losses import *
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 import os
 import random
 from tensorflow.keras.layers.experimental import preprocessing 
@@ -36,28 +32,14 @@ from keras import backend as K
 from keras.layers.merge import concatenate
 from keras.utils.data_utils import get_file
 from tensorflow import keras
-import segmentation_models as sm
 import cv2
 import datetime
-from segmentation_models.losses import bce_jaccard_loss
 import pickle
 
-def runner_with_split(initial_parser_obj, splitter_obj, data_provider_obj, trainer_obj):
-  item_list = initial_parser_obj.get_list()
-  train_val_splits, test_part = splitter_obj.get_split(item_list)
-  train_looper(train_val_splits, data_provider_obj, trainer_obj)
+
+def runner(data_provider_obj, trainer_obj):
+  train_data = data_provider_obj.get_train()
+  val_data = data_provider_obj.get_val()
+  trainer_obj.train(train_data, val_data)
 
 
-def runner(train_val_splits, initial_parser_obj, splitter_obj, data_provider_obj, trainer_obj):
-  train_looper(train_val_splits, data_provider_obj, trainer_obj)
-
-
-
-def train_looper(train_val_splits,data_provider_obj, trainer_obj):
-  fold_num = 0
-  for train, val in train_val_splits:
-    train_data = data_provider_obj.get_train(train)
-    val_data = data_provider_obj.get_val(val)
-    plot_n_elements(val_data,5)
-    trainer_obj.train(train_data, val_data, len(train), len(val), fold_num)
-    fold_num += 1

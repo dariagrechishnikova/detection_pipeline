@@ -12,14 +12,10 @@ from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLRO
 from tensorflow.keras.optimizers import Adam
 from dataclasses import dataclass
 from runner import *
-from initial_parser import *
-from splitter import *
 from data_provider import *
 from custom_models import *
 from custom_metrics import *
 from custom_losses import *
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 import os
 import random
 from tensorflow.keras.layers.experimental import preprocessing 
@@ -36,16 +32,15 @@ from keras import backend as K
 from keras.layers.merge import concatenate
 from keras.utils.data_utils import get_file
 from tensorflow import keras
-import segmentation_models as sm
 import cv2
 import datetime
-from segmentation_models.losses import bce_jaccard_loss
+from pathlib import Path
 import wandb
 from wandb.keras import WandbCallback
 
 wandb.login()
 
-class trainer_imseg():
+class trainer_detection():
   def __init__(self, input_model, input_optimizer, input_loss, input_metrics,
                input_batch_size, input_epochs, input_callbacks, input_log_name,
                input_net_info_path, input_model_checkpoints_path):
@@ -60,9 +55,6 @@ class trainer_imseg():
       self.net_info_path =  input_net_info_path
       self.model_checkpoints_path = input_model_checkpoints_path
       
-  def steps_per_epoch_calc(self, train_len, val_len):
-    return [train_len // self.batch_size, val_len // self.batch_size]
-
   
   class lr_to_csvlogger(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs):
@@ -80,17 +72,14 @@ class trainer_imseg():
                  })
     
 
-  def train(self, train_data, val_data, train_len, val_len, fold_num):
+  def train(self, train_data, val_data):
     self.setup_wandb_tracking()
-    epoch_steps, val_steps = self.steps_per_epoch_calc(train_len, val_len)
     self.current_model.compile(optimizer=self.optimizer, loss=self.loss, metrics = self.metrics)
     history = self.current_model.fit(train_data,
     validation_data=val_data,
     epochs=self.epochs,
-    steps_per_epoch=epoch_steps,
-    validation_steps=val_steps,
-    callbacks=[self.lr_to_csvlogger(), CSVLogger(Path(self.net_info_path, f"model_{self.log_name}_fold_{fold_num}.csv")), 
-          ModelCheckpoint(monitor='val_loss', filepath=Path(self.model_checkpoints_path, f"model_{self.log_name}_fold_{fold_num}.hdf5"), save_best_only=True),
+    callbacks=[self.lr_to_csvlogger(), CSVLogger(Path(self.net_info_path, f"model_{self.log_name}.csv")), 
+          ModelCheckpoint(monitor='val_loss', filepath=Path(self.model_checkpoints_path, f"model_{self.log_name}.hdf5"), save_best_only=True),
           WandbCallback()] + self.custom_callbacks)
     return
 

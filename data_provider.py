@@ -8,226 +8,21 @@ Original file is located at
 """
 
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
-from tensorflow.keras.optimizers import Adam
-from dataclasses import dataclass
-from runner import *
-from trainer import *
-from initial_parser import *
-from splitter import *
 from custom_models import *
 from custom_metrics import *
 from custom_losses import *
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 import os
-import random
-from tensorflow.keras.layers.experimental import preprocessing 
+import random 
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
 import albumentations as A
 import numpy as np
-from keras.models import Model
-from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D
-from keras.layers import BatchNormalization
-from keras.layers.core import SpatialDropout2D, Activation
-from tensorflow.keras.applications import EfficientNetB0
 from keras import backend as K
-from keras.layers.merge import concatenate
-from keras.utils.data_utils import get_file
-from tensorflow import keras
-import segmentation_models as sm
 import cv2
-import datetime
-from segmentation_models.losses import bce_jaccard_loss
-
-
-
-
-
-
-
-class data_provider_insteg():
-  def __init__(self, input_data_path, input_label_path, input_buffer_size, input_batch_size, input_parser, input_augmentor):
-      self.path_image = input_data_path
-      self.path_mask = input_label_path
-      self.buffer_size = input_buffer_size
-      self.batch_size = input_batch_size
-      self.parser = input_parser
-      self.augmentor = input_augmentor
-
-  def configure_train_ds(self, train_images_ds):
-    train_batches = (
-        train_images_ds
-        .cache()
-        .shuffle(self.buffer_size)
-        #.map(self.augmentor.tf_augment)
-        .batch(self.batch_size)
-        .repeat()
-        .prefetch(buffer_size=tf.data.AUTOTUNE))
-    return train_batches
-
-  def configure_val_ds(self, test_images_ds):
-    return test_images_ds.batch(self.batch_size)
-
-
-  def create_tf_dataset(self, index_list):
-    random.shuffle(index_list)
-    filenames_ds = tf.data.Dataset.from_tensor_slices(index_list)
-
-    images_ds = filenames_ds.map(self.parser.parse_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    masks_ds = filenames_ds.map(self.parser.parse_mask, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-    ds = tf.data.Dataset.zip((images_ds, masks_ds))
-
-    '''cnt = 0
-    for el in ds:
-      print()
-      try:
-        print(el)
-        cnt += 1
-      except:
-        print(f'Processed {cnt} values')'''
-
-    return ds
-
-  def get_train_tfset(self, index_list):
-    return self.configure_train_ds(self.create_tf_dataset(index_list))
-
-  def get_val_tfset(self, index_list):
-    return self.configure_val_ds(self.create_tf_dataset(index_list))
-
-
-
-#CHECKS. Visualize tf.data.dataset elements
-def display(display_list):
-  plt.figure(figsize=(15, 15))
-
-  title = ['Input Image', 'True Mask']
-
-  for i in range(len(display_list)):
-    plt.subplot(1, len(display_list), i+1)
-    plt.title(title[i])
-    if i == 0:
-      plt.imshow(tf.keras.preprocessing.image.array_to_img(display_list[i]))
-    else:
-      plt.imshow(display_list[i], cmap='gray')
-    plt.axis('off')
-  plt.show()
-
-
-def plot_n_elements(ds,n):
-  for images, masks in ds.take(n):
-    print(images.shape, masks.shape)
-    sample_image, sample_mask = images[0], masks[0]
-    display([sample_image, sample_mask])
-    #display([sample_image, sample_mask[:,:,0], sample_mask[:,:,1], sample_mask[:,:,2], sample_mask[:,:,3]])
-  return
-
-def plot_n_distributions(ds,n):
-  for images, masks in ds.take(n):
-    print('mask shape',masks.shape)
-    print('images shape',images.shape)
-    sample_image, sample_mask = images[0], masks[0]
-    plot_image = tf.reshape(sample_image,150528)
-    plt.hist(plot_image)
-    plt.show()
-    plot_mask = tf.reshape(sample_mask,50176)
-    plt.hist(plot_mask)
-    plt.show()
-  return
-
-#plot_n_elements(data,2)
-
-
-
-
-
-
-class parser_insteg():
-  def __init__(self, input_path_image, input_path_mask, input_height, input_width):
-    self.path_image = input_path_image
-    self.path_mask = input_path_mask
-    self.height = input_height
-    self.width = input_width
-
-
-  def get_boxed_shapes(self, image):
-    box_shape = tf.shape(image)
-    if box_shape[2] == 3:
-      h_w_tensor = tf.constant([self.height, self.width,3])
-    else:
-      h_w_tensor = tf.constant([self.height, self.width,1])
-    left_pre_pad_tensor = (h_w_tensor - box_shape) // 2
-    additional_padding = (h_w_tensor - box_shape) % 2
-    right_pre_pad_tensor = left_pre_pad_tensor + additional_padding
-    return left_pre_pad_tensor, right_pre_pad_tensor
-    
-
-
-  def parse_image(self, filename):
-    image = tf.io.read_file(self.path_image + filename)
-    image = tf.image.decode_png(image, channels=3)
-    left_pre_pad_tensor, right_pre_pad_tensor = self.get_boxed_shapes(image = image)
-    left_pre_pad_tensor = tf.reshape(left_pre_pad_tensor, (-1, 1)) # to make it column
-    right_pre_pad_tensor = tf.reshape(right_pre_pad_tensor, (-1, 1)) # to make it column
-    paddings = tf.concat([left_pre_pad_tensor, right_pre_pad_tensor],1)
-    image = tf.image.adjust_contrast(image, 2.)
-    image = tf.pad(image, paddings, mode='CONSTANT', constant_values=0)
-    image = image / 255
-    return image
-
-  def parse_mask(self, filename):
-    mask = tf.io.read_file(self.path_mask + filename)
-    mask = tf.image.decode_png(mask)
-    left_pre_pad_tensor, right_pre_pad_tensor = self.get_boxed_shapes(image = mask)
-    left_pre_pad_tensor = tf.reshape(left_pre_pad_tensor, (-1, 1)) # to make it column
-    right_pre_pad_tensor = tf.reshape(right_pre_pad_tensor, (-1, 1)) # to make it column
-    paddings = tf.concat([left_pre_pad_tensor, right_pre_pad_tensor],1)
-    mask = tf.pad(mask, paddings, mode='CONSTANT', constant_values=0)
-    mask = tf.cast(mask, tf.float32)
-    return tf.squeeze(mask)
-    
-  def test(self):
-    image = tf.constant(np.zeros(shape=(20, 20, 3), dtype=np.uint8))
-    pre_pad = self.get_boxed_shapes(image)
-    print(pre_pad)
-
-    pre_pat_t = tf.transpose(pre_pad)
-    print(pre_pat_t)
-
-
-
-class augmentor_insteg():
-  def __init__(self):
-    self.transforms = A.Compose([
-                                 A.HorizontalFlip(p=0.5),
-                                 A.VerticalFlip(p=0.5),
-                                 A.RandomRotate90(p=0.5),
-                                 A.Transpose(p=0.5),
-                                 ])
-
-  def aug_fn(self, image, mask):
-    transformed = self.transforms(image=image, masks=mask)
-    transformed_image = transformed['image']
-    transformed_mask = transformed['mask']
-    return transformed_image, transformed_mask
-
-  def tf_augment(self, image, mask):
-    im_shape = image.shape
-    msk_shape = mask.shape
-    #print(f"Inside tf_aug_fn: image.shape = {image.shape}, mask.shape = {mask.shape}")
-    [aug_image, aug_mask] = tf.numpy_function(self.aug_fn, [image, mask], [tf.float32, tf.float32])
-    aug_image.set_shape(im_shape)
-    aug_mask.set_shape(msk_shape)
-    return aug_image, aug_mask
-
-
-
 
 
 class target_transforms():
   @tf.function
-  def transform_targets_for_output(y_true, grid_size, anchor_idxs):
+  def transform_targets_for_output(self, y_true, grid_size, anchor_idxs):
     # y_true: (N, boxes, (x1, y1, x2, y2, class, best_anchor))
     N = tf.shape(y_true)[0]
 
@@ -268,9 +63,9 @@ class target_transforms():
         y_true_out, indexes.stack(), updates.stack())
 
 
-  def transform_targets(y_train, anchors, anchor_masks, size):
+  def transform_targets(self, y_train, anchors, anchor_masks, size, num_grid_cell):
     y_outs = []
-    grid_size = size // 32
+    grid_size = size // num_grid_cell
 
     # calculate anchor index for true boxes
     anchors = tf.cast(anchors, tf.float32)
@@ -288,14 +83,14 @@ class target_transforms():
     y_train = tf.concat([y_train, anchor_idx], axis=-1)
 
     for anchor_idxs in anchor_masks:
-        y_outs.append(transform_targets_for_output(
+        y_outs.append(self.transform_targets_for_output(
             y_train, grid_size, anchor_idxs))
         grid_size *= 2
 
     return tuple(y_outs)
 
 
-  def transform_images(x_train, size):
+  def transform_images(self, x_train, size):
     x_train = tf.image.resize(x_train, (size, size))
     x_train = x_train / 255
     return x_train
@@ -306,14 +101,6 @@ class target_transforms():
 
 
 class parser():
-  def
-
-
-class augment():
-  def
-
-
-class data_povider():
   def __init__(self):
     self.IMAGE_FEATURE_MAP = {
     'image/encoded': tf.io.FixedLenFeature([], tf.string),
@@ -323,9 +110,7 @@ class data_povider():
     'image/object/bbox/ymax': tf.io.VarLenFeature(tf.float32),
     'image/object/class/text': tf.io.VarLenFeature(tf.string),
     }
-    self.tt_obj = target_transforms()
-
-  def parse_tfrecord(self, tfrecord, class_table, size):
+  def parse_tfrecord(self, tfrecord, class_table, size, yolo_max_boxes):
     x = tf.io.parse_single_example(tfrecord, self.IMAGE_FEATURE_MAP)
     x_train = tf.image.decode_jpeg(x['image/encoded'], channels=3)
     x_train = tf.image.resize(x_train, (size, size))
@@ -339,39 +124,59 @@ class data_povider():
                         tf.sparse.to_dense(x['image/object/bbox/ymax']),
                         labels], axis=1)
 
-    paddings = [[0, FLAGS.yolo_max_boxes - tf.shape(y_train)[0]], [0, 0]]
+    paddings = [[0, yolo_max_boxes - tf.shape(y_train)[0]], [0, 0]]
     y_train = tf.pad(y_train, paddings)
 
     return x_train, y_train
 
 
-  def load_tfrecord_dataset(self, file_pattern, class_file, size=416):
+  def load_tfrecord_dataset(self, file_pattern, class_file, yolo_max_boxes, size):
     LINE_NUMBER = -1  # TODO: use tf.lookup.TextFileIndex.LINE_NUMBER
     class_table = tf.lookup.StaticHashTable(tf.lookup.TextFileInitializer(
         class_file, tf.string, 0, tf.int64, LINE_NUMBER, delimiter="\n"), -1)
 
     files = tf.data.Dataset.list_files(file_pattern)
     dataset = files.flat_map(tf.data.TFRecordDataset)
-    return dataset.map(lambda x: self.parse_tfrecord(x, class_table, size))
+    return dataset.map(lambda x: self.parse_tfrecord(x, class_table, size, yolo_max_boxes))
 
+
+
+class data_povider_detection():
+  def __init__(self, input_train_dataset, input_val_dataset, input_classes, 
+  input_image_size, input_batch_size, input_yolo_max_boxes, input_num_grid_cell,
+  input_buffer_size = 512):
+    self.tt_obj = target_transforms()
+    self.parser_obj = parser()
+    self.train_dataset = input_train_dataset
+    self.val_dataset = input_val_dataset
+    self.classes = input_classes
+    self.size = input_image_size
+    self.buffer_size = input_buffer_size
+    self.batch_size = input_batch_size
+    self.yolo_max_boxes = input_yolo_max_boxes
+    self.num_grid_cell = input_num_grid_cell
+    self.anchors = np.array([(9, 11), (11, 19), (16, 33), (18, 16), (26, 63),
+                         (32, 27),(56, 43), (42, 114), (94, 78)],
+                        np.float32) / self.size              
+    self.anchor_masks = np.array([[6, 7, 8], [3, 4, 5], [0, 1, 2]])
 
   def get_train(self):
-    train_dataset = self.load_tfrecord_dataset(FLAGS.dataset, FLAGS.classes, FLAGS.size)
-    train_dataset = train_dataset.shuffle(buffer_size=512)
-    train_dataset = train_dataset.batch(FLAGS.batch_size)
+    train_dataset = self.parser_obj.load_tfrecord_dataset(self.train_dataset, self.classes, self.yolo_max_boxes, self.size)
+    train_dataset = train_dataset.shuffle(self.buffer_size)
+    train_dataset = train_dataset.batch(self.batch_size)
     train_dataset = train_dataset.map(lambda x, y: (
-        self.tt_obj.transform_images(x, FLAGS.size),
-        self.tt_obj.transform_targets(y, anchors, anchor_masks, FLAGS.size)))
+        self.tt_obj.transform_images(x, self.size),
+        self.tt_obj.transform_targets(y, self.anchors, self.anchor_masks, self.size, self.num_grid_cell)))
     train_dataset = train_dataset.prefetch(
         buffer_size=tf.data.experimental.AUTOTUNE)
     return train_dataset
 
   def get_val(self):
-    val_dataset = self.load_tfrecord_dataset(FLAGS.val_dataset, FLAGS.classes, FLAGS.size)
-    val_dataset = val_dataset.batch(FLAGS.batch_size)
+    val_dataset = self.parser_obj.load_tfrecord_dataset(self.val_dataset, self.classes, self.yolo_max_boxes, self.size)
+    val_dataset = val_dataset.batch(self.batch_size)
     val_dataset = val_dataset.map(lambda x, y: (
-        self.tt_obj.transform_images(x, FLAGS.size),
-        self.tt_obj.transform_targets(y, anchors, anchor_masks, FLAGS.size)))
+        self.tt_obj.transform_images(x, self.size),
+        self.tt_obj.transform_targets(y, self.anchors, self.anchor_masks, self.size, self.num_grid_cell)))
     return val_dataset
 
 

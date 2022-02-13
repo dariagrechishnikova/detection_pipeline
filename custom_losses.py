@@ -7,38 +7,20 @@ Original file is located at
     https://colab.research.google.com/drive/1qCXO1Do7SSW9vkzUNJuQt0OLvKqvIUmF
 """
 import tensorflow as tf
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
-from tensorflow.keras.optimizers import Adam
-from dataclasses import dataclass
 from runner import *
 from trainer import *
-from initial_parser import *
-from splitter import *
 from data_provider import *
 from custom_models import *
 from custom_metrics import *
-from iterstrat.ml_stratifiers import MultilabelStratifiedKFold
-from iterstrat.ml_stratifiers import MultilabelStratifiedShuffleSplit
 import os
 import random
 from tensorflow.keras.layers.experimental import preprocessing 
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import albumentations as A
 import numpy as np
-from keras.models import Model
-from keras.layers import Input, Conv2D, MaxPooling2D, UpSampling2D
-from keras.layers import BatchNormalization
-from keras.layers.core import SpatialDropout2D, Activation
-from tensorflow.keras.applications import EfficientNetB0
 from keras import backend as K
 from keras.layers.merge import concatenate
 from keras.utils.data_utils import get_file
 from tensorflow import keras
-import segmentation_models as sm
-import cv2
-import datetime
-from segmentation_models.losses import bce_jaccard_loss
 
 
 def dice_coef(y_true, y_pred):
