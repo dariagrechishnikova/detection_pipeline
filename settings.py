@@ -27,8 +27,6 @@ import ensembling
 
 
 
-log_dir = "tensor_board_logs/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
 
 
@@ -43,8 +41,8 @@ anchor_masks = np.array([[6, 7, 8], [3, 4, 5], [0, 1, 2]])
 yloss = [YoloLoss(anchors[mask], classes=3) for mask in anchor_masks]
 
 yolov3_sart_params = {
-  'input_train_dataset': '/content/drive/MyDrive/Sartorius/tfrec/train.tfrec',
-  'input_val_dataset': '/content/drive/MyDrive/Sartorius/tfrec/val.tfrec',
+  'input_train_dataset': '/content/drive/MyDrive/test_tfrec_ds/train.tfrec',
+  'input_val_dataset': '/content/drive/MyDrive/test_tfrec_ds/val.tfrec',
   'input_classes': '/content/drive/MyDrive/Sartorius/classes_names.txt', 
   'input_image_size': 416,
   'input_batch_size': 16,
@@ -56,9 +54,9 @@ yolov3_sart_params = {
   'input_loss': yloss, 
   'input_metrics': 'acc', 
   'input_epochs': 100,  
-  'net_info_path': '/content/drive/MyDrive/models_misc/network_info/', 
-  'model_checkpoints_path': '/content/drive/MyDrive/models_misc/model_checkpoints',
-  'input_callbacks': [ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3), EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True), tensorboard_callback],
+  'net_info_path': '/content/drive/MyDrive/Sartorius/detection_pipeline_outputs/network_info/', 
+  'model_checkpoints_path': '/content/drive/MyDrive/Sartorius/detection_pipeline_outputs/model_checkpoints',
+  'input_callbacks': [ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=3), EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)]
 }
 
 

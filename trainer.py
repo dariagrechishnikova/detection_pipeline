@@ -35,10 +35,12 @@ from tensorflow import keras
 import cv2
 import datetime
 from pathlib import Path
+from settings import *
 import wandb
 from wandb.keras import WandbCallback
 
-wandb.login()
+
+
 
 class trainer_detection():
   def __init__(self, input_model, input_optimizer, input_loss, input_metrics,
@@ -61,15 +63,9 @@ class trainer_detection():
       logs['learning_rate'] = self.model.optimizer._decayed_lr('float32').numpy()
 
   def setup_wandb_tracking(self):
+    wandb.login()
     run = wandb.init(project=self.log_name,
-                 config={  # and include hyperparameters and metadata
-                     #"learning_rate": 0.005,
-                     "epochs": self.epochs,
-                     "batch_size": self.batch_size,
-                     #"loss_function": "sparse_categorical_crossentropy",
-                     "architecture": self.log_name,
-                     "dataset": "big"
-                 })
+                 config=str(self.log_name) + '_params')
     
 
   def train(self, train_data, val_data):
@@ -80,6 +76,6 @@ class trainer_detection():
     epochs=self.epochs,
     callbacks=[self.lr_to_csvlogger(), CSVLogger(Path(self.net_info_path, f"model_{self.log_name}.csv")), 
           ModelCheckpoint(monitor='val_loss', filepath=Path(self.model_checkpoints_path, f"model_{self.log_name}.hdf5"), save_best_only=True),
-          WandbCallback()] + self.custom_callbacks)
+          TensorBoard(log_dir=Path(self.net_info_path, 'tensorboard_logs'), histogram_freq=1), WandbCallback()] + self.custom_callbacks)
     return
 
