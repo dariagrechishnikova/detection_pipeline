@@ -20,7 +20,7 @@ from keras import backend as K
 import cv2
 
 
-class target_transforms():
+class target_transforms_yolov3():
   @tf.function
   def transform_targets_for_output(self, y_true, grid_size, anchor_idxs):
     # y_true: (N, boxes, (x1, y1, x2, y2, class, best_anchor))
@@ -100,7 +100,7 @@ class target_transforms():
 
 
 
-class parser():
+class parser_yolov3():
   def __init__(self):
     self.IMAGE_FEATURE_MAP = {
     'image/encoded': tf.io.FixedLenFeature([], tf.string),
@@ -141,12 +141,12 @@ class parser():
 
 
 
-class data_povider_detection():
+class data_povider_yolov3():
   def __init__(self, input_train_dataset, input_val_dataset, input_classes, 
   input_image_size, input_batch_size, input_yolo_max_boxes, input_num_grid_cell,
   input_buffer_size = 512):
-    self.tt_obj = target_transforms()
-    self.parser_obj = parser()
+    self.tt_obj = target_transforms_yolov3()
+    self.parser_obj = parser_yolov3()
     self.train_dataset = input_train_dataset
     self.val_dataset = input_val_dataset
     self.classes = input_classes

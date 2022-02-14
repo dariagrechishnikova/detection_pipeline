@@ -1,7 +1,3 @@
-import sys
-sys.path.append('/content/drive/MyDrive/repos/image_processing_pipeline')
-
-
 import tensorflow as tf
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, CSVLogger, TensorBoard
 from tensorflow.keras.optimizers import Adam

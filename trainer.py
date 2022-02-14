@@ -44,7 +44,7 @@ from wandb.keras import WandbCallback
 
 class trainer_detection():
   def __init__(self, input_model, input_optimizer, input_loss, input_metrics,
-               input_batch_size, input_epochs, input_callbacks, input_log_name,
+               input_batch_size, input_epochs, input_callbacks, config_dict, input_log_name,
                input_net_info_path, input_model_checkpoints_path):
       self.current_model = input_model
       self.batch_size = input_batch_size
@@ -53,6 +53,7 @@ class trainer_detection():
       self.metrics = input_metrics
       self.epochs = input_epochs
       self.custom_callbacks = input_callbacks
+      self.config_dict = config_dict
       self.log_name = input_log_name
       self.net_info_path =  input_net_info_path
       self.model_checkpoints_path = input_model_checkpoints_path
@@ -64,8 +65,7 @@ class trainer_detection():
 
   def setup_wandb_tracking(self):
     wandb.login()
-    run = wandb.init(project=self.log_name,
-                 config=str(self.log_name) + '_params')
+    run = wandb.init(config=self.config_dict)
     
 
   def train(self, train_data, val_data):
