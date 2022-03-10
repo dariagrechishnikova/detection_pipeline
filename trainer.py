@@ -71,5 +71,5 @@ class trainer_detection():
     epochs=self.epochs,
     callbacks=[self.lr_to_csvlogger(), CSVLogger(Path(self.net_info_path, f"model_{self.log_name}.csv")), 
           ModelCheckpoint(monitor='val_loss', filepath=Path(self.model_checkpoints_path, f"model_{self.log_name}.hdf5"), save_best_only=True),
-          TensorBoard(log_dir=Path(self.net_info_path, 'tensorboard_logs', str(self.log_name), histogram_freq=1)), WandbCallback()] + self.custom_callbacks)
+          TensorBoard(log_dir=Path(self.net_info_path, 'tensorboard_logs', str(self.log_name)), histogram_freq=1), WandbCallback()] + self.custom_callbacks)
     return
