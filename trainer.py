@@ -62,20 +62,14 @@ class trainer_detection():
   class lr_to_csvlogger(keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs):
       logs['learning_rate'] = self.model.optimizer._decayed_lr('float32').numpy()
-
-  def setup_wandb_tracking(self):
-    wandb.login()
-    run = wandb.init(config=self.config_dict)
     
 
   def train(self, train_data, val_data):
-    self.setup_wandb_tracking()
     self.current_model.compile(optimizer=self.optimizer, loss=self.loss, metrics = self.metrics)
     history = self.current_model.fit(train_data,
     validation_data=val_data,
     epochs=self.epochs,
     callbacks=[self.lr_to_csvlogger(), CSVLogger(Path(self.net_info_path, f"model_{self.log_name}.csv")), 
           ModelCheckpoint(monitor='val_loss', filepath=Path(self.model_checkpoints_path, f"model_{self.log_name}.hdf5"), save_best_only=True),
-          TensorBoard(log_dir=Path(self.net_info_path, 'tensorboard_logs'), histogram_freq=1), WandbCallback()] + self.custom_callbacks)
+          TensorBoard(log_dir=Path(self.net_info_path, 'tensorboard_logs', str(self.log_name), histogram_freq=1)), WandbCallback()] + self.custom_callbacks)
     return
-

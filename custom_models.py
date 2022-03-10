@@ -28,8 +28,8 @@ from keras import backend as K
 from keras.layers.merge import concatenate
 from keras.utils.data_utils import get_file
 from tensorflow import keras
-from yolov3_model import *
-
+#from yolov3_model import *
+from yolox_model import *
 
 
 class yolov3():
@@ -38,6 +38,16 @@ class yolov3():
     return model
 
    
+class yoloxmy():
+  def build_model(self):
+    model = myyolox()
+    return model
 
+
+class myyolo_convres():
+  def build_model(self):
+    model = myconv_res()
+    print(model.summary())
+    return model
 
     

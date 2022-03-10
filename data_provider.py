@@ -47,6 +47,11 @@ class target_transforms_yolov3():
                 box_xy = (y_true[i][j][0:2] + y_true[i][j][2:4]) / 2
 
                 anchor_idx = tf.cast(tf.where(anchor_eq), tf.int32)
+                #get index of grid cell. box_xy are scaled coordinates 
+                #im_coord_box/im_size. grid_size here is im_size//num_grid_cell.
+                #Therefore to get grid index where box falls we need 
+                #im_coord_box/im_size * (im_size//num_grid_cell). But to take 
+                #int part we need im_coord_box/im_size // (1/(im_size//num_grid_cell))
                 grid_xy = tf.cast(box_xy // (1/grid_size), tf.int32)
 
                 # grid[y][x][anchor] = (tx, ty, bw, bh, obj, class)
@@ -181,6 +186,108 @@ class data_povider_yolov3():
 
 
 
+
+
+
+
+
+
+
+
+class target_transform_yoloxmy():
+  #Modify the class to produce targets with dim 
+  #[batch, grid, grid, (x1,x2,w,h,obj,class))]. 
+  #Each grid cell gives only one bounding box with scaled x1,x2,w,h (in [0,1])
+  #contains the absolute coordinate (relative to the image)
+  @tf.function
+  def transform_targets_for_output(self, y_true, grid_size):
+    # y_true: (N, boxes, (x1, y1, x2, y2, class))
+    N = tf.shape(y_true)[0]
+    
+    # y_true_out: (N, grid, grid, max_box_per_cell, [x1, y1, x2, y2, obj, class])
+    y_true_out = tf.zeros((N, grid_size, grid_size, 6))
+
+    indexes = tf.TensorArray(tf.int32, 1, dynamic_size=True)
+    updates = tf.TensorArray(tf.float32, 1, dynamic_size=True)
+    idx = 0
+    for i in tf.range(N):
+        for j in tf.range(tf.shape(y_true)[1]):
+            if tf.equal(y_true[i][j][2], 0):
+                continue
+
+            box = y_true[i][j][0:4]
+            box_xy = (y_true[i][j][0:2] + y_true[i][j][2:4]) / 2
+
+
+            grid_xy = tf.cast(box_xy // (1/grid_size), tf.int32)
+ 
+            # grid[y][x] = (tx, ty, bw, bh, obj, class)
+            indexes = indexes.write(
+                idx, [i, grid_xy[1], grid_xy[0]])
+            updates = updates.write(
+                idx, [box[0], box[1], box[2]-box[0], box[3]-box[1], 1, y_true[i][j][4]])
+            idx += 1
+
+    # tf.print(indexes.stack())
+    # tf.print(updates.stack())
+
+    return tf.tensor_scatter_nd_update(
+        y_true_out, indexes.stack(), updates.stack())
+
+            
+            
+
+
+  def transform_targets(self, y_train, size, num_grid_cell):
+    grid_size = size // num_grid_cell
+
+    y_outs = self.transform_targets_for_output(y_train, grid_size)
+
+    return y_outs
+
+
+  def transform_images(self,x_train, size):
+    x_train = tf.image.resize(x_train, (size, size))
+    x_train = x_train / 255
+    return x_train
+
+
+
+
+
+class data_povider_yoloxmy():
+  def __init__(self, input_train_dataset, input_val_dataset, input_classes, 
+  input_image_size, input_batch_size, input_yolo_max_boxes, input_num_grid_cell,
+  input_buffer_size = 512):
+    self.tt_obj = target_transform_yoloxmy()
+    self.parser_obj = parser_yolov3()
+    self.train_dataset = input_train_dataset
+    self.val_dataset = input_val_dataset
+    self.classes = input_classes
+    self.size = input_image_size
+    self.buffer_size = input_buffer_size
+    self.batch_size = input_batch_size
+    self.yolo_max_boxes = input_yolo_max_boxes
+    self.num_grid_cell = input_num_grid_cell
+
+  def get_train(self):
+    train_dataset = self.parser_obj.load_tfrecord_dataset(self.train_dataset, self.classes, self.yolo_max_boxes, self.size)
+    train_dataset = train_dataset.shuffle(self.buffer_size)
+    train_dataset = train_dataset.batch(self.batch_size)
+    train_dataset = train_dataset.map(lambda x, y: (
+        self.tt_obj.transform_images(x, self.size),
+        self.tt_obj.transform_targets(y, self.size, self.num_grid_cell)))
+    train_dataset = train_dataset.prefetch(
+        buffer_size=tf.data.experimental.AUTOTUNE)
+    return train_dataset
+
+  def get_val(self):
+    val_dataset = self.parser_obj.load_tfrecord_dataset(self.val_dataset, self.classes, self.yolo_max_boxes, self.size)
+    val_dataset = val_dataset.batch(self.batch_size)
+    val_dataset = val_dataset.map(lambda x, y: (
+        self.tt_obj.transform_images(x, self.size),
+        self.tt_obj.transform_targets(y, self.size, self.num_grid_cell)))
+    return val_dataset
 
 
 
