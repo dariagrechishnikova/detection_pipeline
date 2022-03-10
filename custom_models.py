@@ -50,4 +50,18 @@ class myyolo_convres():
     print(model.summary())
     return model
 
+
+class myyolo_convres_darknet():
+  def build_model(self):
+    model = myconv_res_darknet()
+    print(model.summary())
+    return model
+
+
+class myyolo_convres_leaky_relu_bn():
+  def build_model(self):
+    model = myconv_res_leaky_relu_bn()
+    print(model.summary())
+    return model
+
     

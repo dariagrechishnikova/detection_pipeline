@@ -258,6 +258,7 @@ def myConv(x, filters, size, strides=1, batch_norm=True):
     return x
 
 
+
 def myResidual(x, filters):
     prev = x
     x = myConv(x, filters // 2, 1)
@@ -273,6 +274,36 @@ def myBlock(x, filters, blocks):
     return x
 
 
+def leaky_relu_bn_Conv(x, filters, size, strides=1, batch_norm=True):
+    if strides == 1:
+        padding = 'same'
+    else:
+        x = ZeroPadding2D(((1, 0), (1, 0)))(x)  # top left half-padding
+        padding = 'valid'
+    x = Conv2D(filters=filters, kernel_size=size,
+               strides=strides, padding=padding,
+               use_bias=not batch_norm, kernel_regularizer=l2(0.0005))(x)
+    if batch_norm:
+        x = LeakyReLU(alpha=0.1)(x)
+        x = BatchNormalization()(x)
+    return x
+
+
+def leaky_relu_bn_Residual(x, filters):
+    prev = x
+    x = leaky_relu_bn_Conv(x, filters // 2, 1)
+    x = leaky_relu_bn_Conv(x, filters, 3)
+    x = Add()([prev, x])
+    return x
+
+
+def leaky_relu_bn_Block(x, filters, blocks):
+    x = leaky_relu_bn_Conv(x, filters, 3, strides=2)
+    for _ in range(blocks):
+        x = leaky_relu_bn_Residual(x, filters)
+    return x
+
+
 def myconv_res(classes=3):
     x = inputs = Input([None, None, 3])
     x = myConv(x, 32, 3)
@@ -280,6 +311,37 @@ def myconv_res(classes=3):
     x = myBlock(x, 128, 1)  # skip connection
     x = myBlock(x, 256, 1)  # skip connection
     x =  myBlock(x, 512, 1)
+
+    x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 3, strides=1, padding='same', activation='swish')(x)
+    x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 1, strides=1, padding='same', activation='swish')(x)
+    x = Lambda(lambda x: tf.reshape(x, (-1, tf.shape(x)[1], tf.shape(x)[2], classes + 5)))(x)
+    
+    return tf.keras.Model(inputs, x)
+
+
+
+def myconv_res_darknet(classes=3):
+    x = inputs = Input([None, None, 3])
+    x = DarknetConv(x, 32, 3)
+    x = DarknetBlock(x, 64, 1)
+    x = DarknetBlock(x, 128, 1)  # skip connection
+    x = DarknetBlock(x, 256, 1)  # skip connection
+    x =  DarknetBlock(x, 512, 1)
+
+    x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 3, strides=1, padding='same', activation='swish')(x)
+    x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 1, strides=1, padding='same', activation='swish')(x)
+    x = Lambda(lambda x: tf.reshape(x, (-1, tf.shape(x)[1], tf.shape(x)[2], classes + 5)))(x)
+    
+    return tf.keras.Model(inputs, x)
+
+
+def myconv_res_leaky_relu_bn(classes=3):
+    x = inputs = Input([None, None, 3])
+    x = leaky_relu_bn_Conv(x, 32, 3)
+    x = leaky_relu_bn_Block(x, 64, 1)
+    x = leaky_relu_bn_Block(x, 128, 1)  # skip connection
+    x = leaky_relu_bn_Block(x, 256, 1)  # skip connection
+    x =  leaky_relu_bn_Block(x, 512, 1)
 
     x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 3, strides=1, padding='same', activation='swish')(x)
     x = tf.keras.layers.Conv2D(filters = (classes + 5), kernel_size = 1, strides=1, padding='same', activation='swish')(x)
